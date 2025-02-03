@@ -12,59 +12,80 @@ Students:
 """
 
 # from MLModelReturns_4 import validDict
+import json
 import mysql.connector
+import MLModelReturns_4
+validDict = MLModelReturns_4.main()
+
+DB_CONFIG = {
+    "host": "localhost",  # Uppdatera om MySQL är på en annan server
+    "user": "JonHemdator",  # Uppdatera med din MySQL-användare
+    "password": "jTc5r3pQcCctB#esWc2&",  # Uppdatera med ditt lösenord
+    "database": "ml_project"  # Databasnamnet du skapade
+}
 
 def db_connection():
-    """
-    Create and return a database connection.
-    Pseudo code:
-       - try to connect with mysql.connector.connect
-       - return the connection object if successful
-       - otherwise handle exceptions and return None
-    """
-    # Example placeholder:
-    # cnxn = mysql.connector.connect(
-    #   host="localhost",
-    #   user="root",
-    #   password="password",
-    #   database="my_database"
-    # )
-    # return cnxn
-    pass
+    """ Skapar och returnerar en databasanslutning. """
+    try:
+        cnxn = mysql.connector.connect(**DB_CONFIG)
+        print("Databasanslutning lyckades!")
+        return cnxn
+    except mysql.connector.Error as err:
+        print(f"Fel vid anslutning: {err}")
+        return None
 
 def insert_data(data, cnxn):
+    """ Infogar artikeldatan i MySQL-tabellen 'news'. """
+    cursor = cnxn.cursor()
+    sql = """
+    INSERT INTO news (title, summary, link, published, topic)
+    VALUES (%s, %s, %s, %s, %s)
     """
-    Insert the provided data (list of dict) into the 'news' table.
-    Each dict in 'data' is expected to have:
-      - 'title'
-      - 'summary'
-      - 'link'
-      - 'published'
-      - 'topic'
-    """
-    # Pseudo code:
-    #   1) Create a cursor from cnxn
-    #   2) Define an INSERT statement, e.g.:
-    #      sql = "INSERT INTO news (title, summary, link, published, topic) VALUES (%s, %s, %s, %s, %s)"
-    #   3) Transform data into a list of tuples
-    #   4) Use cursor.executemany(sql, list_of_tuples)
-    #   5) cnxn.commit()
-    #   6) Close the cursor
-    pass
+    
+    values = [(d["title"], d["summary"], d["link"], d["published"], json.dumps(d["categories"])) for d in data]
+    
+    try:
+        cursor.executemany(sql, values)
+        cnxn.commit()
+        print(f"{cursor.rowcount} rader infogade i databasen.")
+    except mysql.connector.Error as err:
+        print(f"Fel vid infogning: {err}")
+    finally:
+        cursor.close()
+
+def calculate_category_counts(cnxn):
+    """ Räknar antal artiklar per kategori och lagrar i databasen """
+    cursor = cnxn.cursor()
+
+    # Hämta kategoriantal
+    cursor.execute("SELECT topic FROM news")
+    topics = cursor.fetchall()
+
+    category_count = {}
+    for row in topics:
+        categories = json.loads(row[0])  # Konvertera JSON-sträng till lista
+        for category in categories:
+            category_count[category] = category_count.get(category, 0) + 1
+
+    # Infoga eller uppdatera kategoriantal i databasen
+    cursor.execute("DELETE FROM category_counts")  # Rensa tabellen först
+    insert_query = "INSERT INTO category_counts (category, article_count) VALUES (%s, %s)"
+    cursor.executemany(insert_query, list(category_count.items()))
+
+    cnxn.commit()
+    cursor.close()
+
 
 def main():
-    # 1. Connect to the DB
     cnxn = db_connection()
-    
     if cnxn:
-        # 2. Insert data
-        # data = validDict  # from MLModelReturns_4
-        # insert_data(data, cnxn)
-        
-        # 3. Close the connection
+        insert_data(validDict, cnxn)  # Infoga artiklar i databasen
+        calculate_category_counts(cnxn)  # Beräkna kategoriantal
         cnxn.close()
+        print("Databasanslutning stängd.")
     else:
-        print("No database connection established.")
+        print("Ingen databasanslutning etablerad.")
 
 if __name__ == "__main__":
     main()
+

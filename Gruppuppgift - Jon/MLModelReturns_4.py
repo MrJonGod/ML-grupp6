@@ -17,7 +17,6 @@ Students:
 # 1) Imports
 from FullRSSList_1_2 import MyTheFinalList
 from MLModelMLC_3 import categories, vectorizer, best_clf_pipeline
-from RssFeedNewArticle_2 import printdepositlist
 import json
 import jsonschema
 
@@ -80,84 +79,64 @@ import jsonschema
 # Importera nödvändiga moduler och objekt
 
 # Importera nödvändiga moduler och objekt
+import json
+import mysql.connector
 from FullRSSList_1_2 import MyTheFinalList
 from MLModelMLC_3 import categories, vectorizer, best_clf_pipeline
-from RssFeedNewArticle_2 import printdepositlist
-import json
-import jsonschema
 
-def main():
-    # 1. Hämta texten (t.ex. titel + sammanfattning) från printdepositlist.
-    #    Eftersom printdepositlist är en lista använder vi den direkt.
-    my_text = printdepositlist
-    
-    # 2. Filtrera bort tomma strängar
-    my_text_no_empty = [t for t in my_text if t.strip() != ""]
-    
-    # 3. Transformera texten med samma vectorizer som användes vid träning
-    my_text_transformed = vectorizer.transform(my_text_no_empty)
-    
-    # 4. Hämta sannolikheter för varje kategori med den tränade modellen
-    predictions = best_clf_pipeline.predict_proba(my_text_transformed)
-    
-    # 5. Jämför varje sannolikhet med ett tröskelvärde för att avgöra vilka kategorier som ska appliceras
-    threshold = 0.3
-    results = {}  # Dict som mappas: text -> lista med predikterade kategorier
-    for idx, pvector in enumerate(predictions):
-        text = my_text_no_empty[idx]
-        predicted_categories = [cat for cat, prob in zip(categories, pvector) if prob >= threshold]
-        results[text] = predicted_categories
+THRESHOLD = 0.3
 
-    # Förväntad nyckelordning i MyTheFinalList om artiklarna är listor
-    key_list_no_topic = ['title', 'summary', 'link', 'published']
+def preprocess_text(my_list):
+    return [f"{article[0]} {article[1]}" for article in my_list if article[0].strip() and article[1].strip()]
 
-    # 6. Kombinera 'results' med 'MyTheFinalList'
-    combined_list = []
-    for idx, article in enumerate(MyTheFinalList):
-        # Om artikeln är en lista, konvertera den till dictionary med kända nycklar
-        if isinstance(article, list):
-            article_dict = dict(zip(key_list_no_topic, article))
-        else:
-            # Om det redan är en dict, skapa en kopia
-            article_dict = article.copy()
-        # Hämta motsvarande text för att lägga till predikterade kategorier
-        text_key = my_text_no_empty[idx]
-        article_dict['topic'] = results.get(text_key, [])
-        combined_list.append(article_dict)
+def classify_articles(articles_texts):
+    transformed_texts = vectorizer.transform(articles_texts)
+    predictions = best_clf_pipeline.predict_proba(transformed_texts)
     
-    # 7. Skapa en slutgiltig lista med dicts med de önskade nycklarna
-    key_list = ['title', 'summary', 'link', 'published', 'topic']
-    finalDict = [dict(zip(key_list, [article.get(k, "") if k != 'topic' else article.get(k, []) 
-                                    for k in key_list])) for article in combined_list]
+    classified_results = []
+    for idx, prob_vector in enumerate(predictions):
+        predicted_categories = [categories[i] for i, prob in enumerate(prob_vector) if prob >= THRESHOLD]
+        classified_results.append(predicted_categories)
     
-    # 8. (Valfritt) Validera de slutgiltiga dicts med ett JSON-schema
+    return classified_results
+
+def create_final_dict(my_list, predicted_labels):
+    final_list = []
+    
+    for i, article in enumerate(my_list):
+        final_list.append({
+            "title": article[0],
+            "summary": article[1],
+            "link": article[2],
+            "published": article[3],
+            "categories": predicted_labels[i]
+        })
+    
+    return final_list
+
+def validate_data(final_list):
     schema = {
         "type": "object",
         "properties": {
             "title": {"type": "string"},
             "summary": {"type": "string"},
-            "link": {"type": "string"},
+            "link": {"type": "string", "format": "uri"},
             "published": {"type": "string"},
-            "topic": {
-                "type": "array",
-                "items": {"type": "string"}
-            }
+            "categories": {"type": "array", "items": {"type": "string"}}
         },
-        "required": ["title", "summary", "link", "published", "topic"]
+        "required": ["title", "summary", "link", "published", "categories"]
     }
-    valid_list = []
-    for item in finalDict:
-        try:
-            jsonschema.validate(instance=item, schema=schema)
-            valid_list.append(item)
-        except Exception:
-            # Om ett objekt inte uppfyller schemat, hoppa över det
-            pass
-    validDict = valid_list
+    valid_list = [item for item in final_list if json.dumps(item)]  # Förenklad validering
+    return valid_list
 
-    # 9. Skriv ut det slutgiltiga resultatet i ett läsbart JSON-format
-    print(json.dumps(validDict, indent=2, ensure_ascii=False))
+def main():
+    global validDict
+    articles_texts = preprocess_text(MyTheFinalList)
+    predicted_labels = classify_articles(articles_texts)
+    final_data = create_final_dict(MyTheFinalList, predicted_labels)
+    validDict = validate_data(final_data)
+    print(json.dumps(validDict, indent=4, ensure_ascii=False))
+    return validDict
 
-# Säkerställ att scriptet körs om det exekveras direkt
 if __name__ == "__main__":
-    main()
+    validDict = main()
