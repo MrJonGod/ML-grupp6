@@ -31,7 +31,7 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
 # Load the dataset
-DATA_PATH = "C:\\workspace\\ML\\ML-grupp6\\Gruppuppgift\\Book1.csv"
+DATA_PATH = "C:\\workspace\\ML\\ML-grupp6\\Gruppuppgift\\Book1_2.csv"
 data_raw = pd.read_csv(DATA_PATH)
 data_raw = data_raw.sample(frac=1)  # Shuffle data
 
@@ -56,6 +56,9 @@ data_raw['Heading'] = data_raw['Heading'].apply(lambda x: ' '.join([word for wor
 # Apply stemming
 stemmer = SnowballStemmer("swedish")
 data_raw['Heading'] = data_raw['Heading'].apply(lambda x: ' '.join([stemmer.stem(word) for word in x.split()]))
+
+# Replace NaN with 0
+data_raw.fillna(0, inplace=True)
 
 # Split the dataset
 train, test = train_test_split(data_raw, random_state=42, test_size=0.30, shuffle=True)
