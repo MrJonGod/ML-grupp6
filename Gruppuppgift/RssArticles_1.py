@@ -1,3 +1,5 @@
+# Deltagare i grupp 6: Jon God, Ulf Björck, William Celik, Michael Lovén
+
 """
 RssArticles_1.py
 
