@@ -50,7 +50,7 @@ def get_db_cursor(dictionary=True):
         cursor.close()
         cnxn.close()
 
-@st.cache_data
+@st.cache_data(ttl=600)
 def get_date_range():
     """
     Retrieves the earliest and latest publication dates from the news database.
@@ -63,7 +63,7 @@ def get_date_range():
         result = cursor.fetchone()
     return result["earliest"], result["latest"]
 
-@st.cache_data
+@st.cache_data(ttl=600)
 def fetch_articles_filtered(start_date, end_date, category, search_query, sort_order):
     """
     Retrieves filtered news articles based on date range, category, and search query directly from the database.
@@ -274,10 +274,10 @@ def main():
         unique_categories = sorted(set(cat for article in all_articles for cat in json.loads(article["topic"])))
         
         st.sidebar.subheader("⚙️ Filteralternativ")
-        selected_category = st.sidebar.selectbox("Filtrera efter kategori:", ["Alla"] + unique_categories)
-        start_date = st.sidebar.date_input(f"Från: (Äldsta: {earliest_date})", earliest_date)
-        end_date = st.sidebar.date_input(f"Till: (Nyaste: {latest_date})", latest_date)
-        search_query = st.sidebar.text_input("Sök efter artiklar")
+        selected_category = st.sidebar.selectbox("📂 Filtrera efter kategori:", ["Alla"] + unique_categories)
+        start_date = st.sidebar.date_input(f"📅 Från och med: (Äldsta: {earliest_date})", earliest_date)
+        end_date = st.sidebar.date_input(f"📅 Till och med: (Nyaste: {latest_date})", latest_date)
+        search_query = st.sidebar.text_input("🔍 Sök efter artiklar")
         sort_option = st.sidebar.radio("Sortera efter:", ["Nyast först", "Äldst först"])
 
         articles = fetch_articles_filtered(start_date, end_date, selected_category, search_query, sort_option)
@@ -295,8 +295,8 @@ def main():
     elif page == "📎 Dataanalys":
         st.title("📎 Dataanalys av nyhetsartiklar")
         st.sidebar.subheader("⚙️ Filteralternativ")
-        start_date = st.sidebar.date_input(f"Från: (Äldsta: {earliest_date})", earliest_date)
-        end_date = st.sidebar.date_input(f"Till: (Nyaste: {latest_date})", latest_date)
+        start_date = st.sidebar.date_input(f"📅 Från och med: (Äldsta: {earliest_date})", earliest_date)
+        end_date = st.sidebar.date_input(f"📅 Till och med: (Nyaste: {latest_date})", latest_date)
 
         articles = fetch_articles_filtered(start_date, end_date, "Alla", "", "Nyast först")
         total_articles = len(articles)
