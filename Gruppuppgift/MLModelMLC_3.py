@@ -1,7 +1,7 @@
 """
 MLModelMLC_3.py
 
-This script trains a multi-label text classification model using data from Book1.csv.
+This script trains a multi-label text classification model using data from Book1_2.csv.
 It:
   - Loads and preprocesses the data
   - Trains an SVC-based OneVsRest model with GridSearchCV

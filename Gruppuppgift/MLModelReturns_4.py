@@ -46,17 +46,30 @@ def classify_articles(articles_texts):
     
     return classified_results
 
+# Function to replace incorrect category names with correct ones
+def fix_category_names(predicted_labels):
+    category_mapping = {
+        "Halsa": "Hälsa",
+        "LivsstilFritt": "Livsstil & Fritid",
+        "SamhalleKonflikter": "Samhälle & Konflikter",
+        "VetenskapTeknik": "Vetenskap & Teknik"
+    }
+
+    return [[category_mapping.get(cat, cat) for cat in categories] for categories in predicted_labels]
+
 def create_final_dict(article_list, predicted_labels):
     """
-    Combines original article data with predicted categories to form a structured dictionary.
+    Combines original article data with predicted categories and fixes category names.
     """
+    fixed_labels = fix_category_names(predicted_labels)  # Apply category name corrections
+
     return [
         {
             "title": article[0],
             "summary": article[1],
             "link": article[2],
             "published": article[3],
-            "categories": predicted_labels[i]
+            "categories": fixed_labels[i]  # Use corrected category names
         }
         for i, article in enumerate(article_list)
     ]
@@ -74,10 +87,19 @@ def main():
     global validDict
     articles_texts = preprocess_text(MyTheFinalList)
     predicted_labels = classify_articles(articles_texts)
-    final_data = create_final_dict(MyTheFinalList, predicted_labels)
+
+    # Remove articles with empty title or summary
+    filtered_final_list = [article for article in MyTheFinalList if article[0].strip() and article[1].strip()]
+
+    print(f"Filtered MyTheFinalList length: {len(filtered_final_list)}")
+    print(f"Predicted labels length: {len(predicted_labels)}")
+
+    final_data = create_final_dict(filtered_final_list, predicted_labels)
     validDict = validate_data(final_data)
     print(json.dumps(validDict, indent=4, ensure_ascii=False))
     return validDict
 
+
 if __name__ == "__main__":
     validDict = main()
+
