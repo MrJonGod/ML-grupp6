@@ -5,20 +5,11 @@ This script takes in articles (posts) from RssArticles_1.py (via `posts`),
 extracts the desired fields (title, summary, link, and published),
 fixes data format issues (like dates), and provides the final list as 'MyTheFinalList'.
 
-Students: 
- - Ensure your 'RssArticles_1.py' is in the same folder (or adjust imports accordingly).
- - Examine how 'posts' is structured, and fix any date format issues carefully.
 """
 
-# 1) Import posts from RssArticles_1
+# Import posts from RssArticles_1
 from RssArticles_1 import posts
 import datetime
-
-# Pseudo code: 
-# - create a function 'gettingNecessaryList' that loops through posts
-# - extract title, summary, link, published
-# - handle errors with try/except if fields are missing
-# - return the collected list
 
 def gettingNecessaryList():
     """
@@ -55,7 +46,7 @@ def gettingNecessaryList():
     return allitems
 
 
-# 2) Store the list of extracted items
+# Store the list of extracted items
 AllItemsX = gettingNecessaryList()
 
 
@@ -92,7 +83,7 @@ def ThefinalList():
     return finalList
     
 
-# 3) Create a variable that holds the final list
+# Create a variable that holds the final list
 MyTheFinalList = ThefinalList()
 
 print(MyTheFinalList)

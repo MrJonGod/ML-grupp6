@@ -4,8 +4,8 @@ import feedparser
 # Define RSS feed URLs
 RSS_URLS = [
     'https://www.dn.se/rss/',
-    'https://www.svt.se/nyheter/lokalt/skane/rss.xml',
-    'https://polisen.se/aktuellt/rss/skane/nyheter-rss---skane/'
+    'https://www.svt.se/rss.xml',
+    'https://rss.aftonbladet.se/rss2/small/pages/sections/senastenytt/'
 ]
 
 # Create an empty list for posts
