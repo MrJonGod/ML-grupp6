@@ -260,10 +260,10 @@ def main():
         unique_categories = sorted(set(cat for article in articles for cat in json.loads(article["topic"])))
 
         st.sidebar.subheader("⚙️ Filteralternativ")
-        selected_category = st.sidebar.selectbox("Filtrera efter kategori:", ["Alla"] + unique_categories)
-        start_date = st.sidebar.date_input(f"Från: (Äldsta: {earliest_date})", earliest_date)
-        end_date = st.sidebar.date_input(f"Till: (Nyaste: {latest_date})", latest_date)
-        search_query = st.sidebar.text_input("Sök efter artiklar")
+        selected_category = st.sidebar.selectbox("📂 Filtrera efter kategori:", ["Alla"] + unique_categories)
+        start_date = st.sidebar.date_input(f"📅 Från och med: (Äldsta: {earliest_date})", earliest_date)
+        end_date = st.sidebar.date_input(f"📅 Till och med: (Nyaste: {latest_date})", latest_date)
+        search_query = st.sidebar.text_input("🔍 Sök efter artiklar")
         sort_option = st.sidebar.radio("Sortera efter:", ["Nyast först", "Äldst först"])
 
         filtered_articles = articles
