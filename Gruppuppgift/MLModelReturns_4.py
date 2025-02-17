@@ -52,7 +52,8 @@ def fix_category_names(predicted_labels):
         "Halsa": "Hälsa",
         "LivsstilFritt": "Livsstil & Fritid",
         "SamhalleKonflikter": "Samhälle & Konflikter",
-        "VetenskapTeknik": "Vetenskap & Teknik"
+        "VetenskapTeknik": "Vetenskap & Teknik",
+        "Miljo": "Miljö"
     }
 
     return [[category_mapping.get(cat, cat) for cat in categories] for categories in predicted_labels]
