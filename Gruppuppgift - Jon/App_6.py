@@ -1,16 +1,17 @@
 """
+App_6.py
 News Dashboard Application
 
 This Streamlit application connects to a MySQL database to fetch, filter, and display AI-classified news articles.
 It provides two main views:
     1. News Articles View: Lists news articles with filtering options.
     2. Data Analysis View: Displays visualizations including a bar chart, line chart, and word cloud.
-The structure and commenting style is aligned with the MLModelReturns_4.py file.
 """
 
 # Standard library imports
 import json
 import datetime
+from contextlib import contextmanager
 
 # Third-party imports
 import streamlit as st
@@ -34,28 +35,75 @@ DB_CONFIG = {
     "database": st.secrets["db_database"]
 }
 
-def get_db_connection():
+@contextmanager
+def get_db_cursor(dictionary=True):
     """
-    Establishes and returns a MySQL database connection.
+    Context manager that yields a MySQL database cursor.
     
-    Returns:
-        mysql.connector.connection.MySQLConnection: The database connection object.
+    Ensures that the connection and cursor are properly closed.
     """
-    return mysql.connector.connect(**DB_CONFIG)
+    cnxn = mysql.connector.connect(**DB_CONFIG)
+    cursor = cnxn.cursor(dictionary=dictionary)
+    try:
+        yield cursor
+    finally:
+        cursor.close()
+        cnxn.close()
 
-def fetch_articles():
+@st.cache_data(ttl=600)
+def get_date_range():
     """
-    Retrieves all news articles from the database, ordered by publication date (most recent first).
+    Retrieves the earliest and latest publication dates from the news database.
     
     Returns:
-        list: A list of dictionaries representing news articles.
+        tuple: A tuple containing the earliest and latest publication dates.
     """
-    cnxn = get_db_connection()
-    cursor = cnxn.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM news ORDER BY published DESC")
-    articles = cursor.fetchall()
-    cursor.close()
-    cnxn.close()
+    with get_db_cursor() as cursor:
+        cursor.execute("SELECT MIN(published) AS earliest, MAX(published) AS latest FROM news")
+        result = cursor.fetchone()
+    return result["earliest"], result["latest"]
+
+@st.cache_data(ttl=600)
+def fetch_articles_filtered(start_date, end_date, category, search_query, sort_order):
+    """
+    Retrieves filtered news articles based on date range, category, and search query directly from the database.
+    The end_date is adjusted to include the entire day by adding one day and using a half-open interval.
+    
+    Args:
+        start_date (date): The start date for filtering.
+        end_date (date): The end date for filtering.
+        category (str): Category filter; if "Alla", no filtering is applied.
+        search_query (str): Text to search for in title or summary.
+        sort_order (str): "Nyast först" or "Äldst först" for sorting.
+    
+    Returns:
+        list: A list of dictionaries representing the filtered news articles.
+    """
+    # Adjust end_date to include the entire day
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+    query = "SELECT * FROM news WHERE published >= %s AND published < %s"
+    params = [start_date, end_date_exclusive]
+    
+    # Apply category filter if not "Alla"
+    if category and category != "Alla":
+        query += " AND JSON_CONTAINS(topic, %s)"
+        params.append(f'"{category}"')
+    
+    # Apply search filter if provided
+    if search_query:
+        query += " AND (LOWER(title) LIKE %s OR LOWER(summary) LIKE %s)"
+        like_query = f"%{search_query.lower()}%"
+        params.extend([like_query, like_query])
+    
+    # Apply sorting based on user selection
+    if sort_order == "Nyast först":
+        query += " ORDER BY published DESC"
+    else:
+        query += " ORDER BY published ASC"
+    
+    with get_db_cursor() as cursor:
+        cursor.execute(query, tuple(params))
+        articles = cursor.fetchall()
     return articles
 
 def fetch_category_counts(start_date, end_date):
@@ -63,30 +111,23 @@ def fetch_category_counts(start_date, end_date):
     Retrieves the count of articles per category within the specified date range.
     
     Args:
-        start_date (date): The start date for filtering articles.
-        end_date (date): The end date for filtering articles.
+        start_date (date): The start date for filtering.
+        end_date (date): The end date for filtering.
     
     Returns:
         dict: A dictionary with category names as keys and counts as values.
     """
-    cnxn = get_db_connection()
-    cursor = cnxn.cursor(dictionary=True)
-    query = """
-    SELECT topic FROM news
-    WHERE published BETWEEN %s AND %s
-    """
-    cursor.execute(query, (start_date, end_date))
-    topics = cursor.fetchall()
-    cursor.close()
-    cnxn.close()
-
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+    with get_db_cursor() as cursor:
+        query = "SELECT topic FROM news WHERE published >= %s AND published < %s"
+        cursor.execute(query, (start_date, end_date_exclusive))
+        topics = cursor.fetchall()
+    
     category_count = {}
     for row in topics:
-        # Parse the JSON string to obtain the list of categories
         categories = json.loads(row["topic"])
         for category in categories:
             category_count[category] = category_count.get(category, 0) + 1
-
     return category_count
 
 def generate_wordcloud(start_date, end_date):
@@ -94,27 +135,21 @@ def generate_wordcloud(start_date, end_date):
     Generates a WordCloud visualization based on article summaries within the specified date range.
     
     Args:
-        start_date (date): The start date for filtering articles.
-        end_date (date): The end date for filtering articles.
+        start_date (date): The start date for filtering.
+        end_date (date): The end date for filtering.
     
     Returns:
         matplotlib.figure.Figure or None: The WordCloud figure if text exists; otherwise, None.
     """
-    cnxn = get_db_connection()
-    cursor = cnxn.cursor(dictionary=True)
-    query = """
-    SELECT summary FROM news
-    WHERE published BETWEEN %s AND %s
-    """
-    cursor.execute(query, (start_date, end_date))
-    summaries = cursor.fetchall()
-    cursor.close()
-    cnxn.close()
-
-    # Combine summaries into a single text and remove stopwords
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+    with get_db_cursor() as cursor:
+        query = "SELECT summary FROM news WHERE published >= %s AND published < %s"
+        cursor.execute(query, (start_date, end_date_exclusive))
+        summaries = cursor.fetchall()
+    
     text = " ".join([row["summary"] for row in summaries])
     cleaned_text = " ".join([word for word in text.split() if word.lower() not in SWEDISH_STOPWORDS])
-
+    
     if cleaned_text.strip():
         wordcloud = WordCloud(width=800, height=400, background_color="#0E1117").generate(cleaned_text)
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -130,8 +165,8 @@ def generate_bar_chart(start_date, end_date):
     Generates a horizontal bar chart showing the number of articles per category within a specified date range.
     
     Args:
-        start_date (date): The start date for filtering articles.
-        end_date (date): The end date for filtering articles.
+        start_date (date): The start date for filtering.
+        end_date (date): The end date for filtering.
     
     Returns:
         matplotlib.figure.Figure or None: The bar chart figure if data is available; otherwise, None.
@@ -170,24 +205,18 @@ def generate_line_chart(start_date, end_date):
     Generates a line chart depicting the number of articles per category per day within the specified date range.
     
     Args:
-        start_date (date): The start date for filtering articles.
-        end_date (date): The end date for filtering articles.
+        start_date (date): The start date for filtering.
+        end_date (date): The end date for filtering.
     
     Returns:
         matplotlib.figure.Figure or None: The line chart figure if data is available; otherwise, None.
     """
-    cnxn = get_db_connection()
-    cursor = cnxn.cursor(dictionary=True)
-    query = """
-    SELECT DATE(published) AS publish_date, topic
-    FROM news
-    WHERE published BETWEEN %s AND %s
-    """
-    cursor.execute(query, (start_date, end_date))
-    data = cursor.fetchall()
-    cursor.close()
-    cnxn.close()
-
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+    with get_db_cursor() as cursor:
+        query = "SELECT DATE(published) AS publish_date, topic FROM news WHERE published >= %s AND published < %s"
+        cursor.execute(query, (start_date, end_date_exclusive))
+        data = cursor.fetchall()
+    
     df = pd.DataFrame(data)
     if df.empty:
         return None
@@ -222,20 +251,52 @@ def generate_line_chart(start_date, end_date):
 
     return fig
 
-def get_date_range():
+def generate_total_articles_line_chart(start_date, end_date):
     """
-    Retrieves the earliest and latest publication dates from the news database.
-    
+    Generates a line chart that shows the total number of articles published per day 
+    within the specified date range.
+
+    Args:
+        start_date (date): The start date for filtering.
+        end_date (date): The end date for filtering.
+
     Returns:
-        tuple: A tuple containing the earliest and latest publication dates.
+        matplotlib.figure.Figure or None: The figure with the line chart if data exists, otherwise None.
     """
-    cnxn = get_db_connection()
-    cursor = cnxn.cursor(dictionary=True)
-    cursor.execute("SELECT MIN(published) AS earliest, MAX(published) AS latest FROM news")
-    result = cursor.fetchone()
-    cursor.close()
-    cnxn.close()
-    return result["earliest"], result["latest"]
+    # Adjust end_date to include the entire day
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+    
+    # Fetch publication dates from the database
+    with get_db_cursor() as cursor:
+        query = "SELECT DATE(published) AS publish_date FROM news WHERE published >= %s AND published < %s"
+        cursor.execute(query, (start_date, end_date_exclusive))
+        data = cursor.fetchall()
+    
+    df = pd.DataFrame(data)
+    if df.empty:
+        return None
+
+    # Count the number of articles per day
+    df_count = df.groupby("publish_date").size().reset_index(name="total_articles")
+    df_count["publish_date"] = pd.to_datetime(df_count["publish_date"])
+
+    # Create the line chart
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=100)
+    ax.plot(df_count["publish_date"], df_count["total_articles"], marker="o", linestyle="-", color="#4086DC")
+
+    # Format the chart to match the dashboard theme
+    fig.patch.set_facecolor("#0E1117")
+    ax.set_facecolor("#0E1117")
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.tick_params(axis='x', colors="white")
+    ax.tick_params(axis='y', colors="white")
+    ax.grid(True, linestyle="--", alpha=0.7, color="gray")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    plt.xticks(rotation=45, ha="right")
+
+    return fig
+
 
 def main():
     """
@@ -243,7 +304,7 @@ def main():
     
     Provides two views:
         1. News Articles View: Displays a list of news articles with filtering options.
-        2. Data Analysis View: Displays visualizations (bar chart, line chart, word cloud) based on filtered data.
+        2. Data Analysis View: Displays visualizations based on filtered data.
     """
     st.set_page_config(page_title="Nyhetsdashboard", layout="wide")
     st.sidebar.title("📌 Navigering")
@@ -254,11 +315,11 @@ def main():
 
     if page == "📰 Nyhetsartiklar":
         st.title("📰 AI-Klassificerade Nyhetsartiklar")
-        articles = fetch_articles()
-
-        # Extract unique categories from articles
-        unique_categories = sorted(set(cat for article in articles for cat in json.loads(article["topic"])))
-
+        
+        # Fetch all articles in the full date range to extract unique categories
+        all_articles = fetch_articles_filtered(earliest_date, latest_date, "Alla", "", "Nyast först")
+        unique_categories = sorted(set(cat for article in all_articles for cat in json.loads(article["topic"])))
+        
         st.sidebar.subheader("⚙️ Filteralternativ")
         selected_category = st.sidebar.selectbox("📂 Filtrera efter kategori:", ["Alla"] + unique_categories)
         start_date = st.sidebar.date_input(f"📅 Från och med: (Äldsta: {earliest_date})", earliest_date)
@@ -266,54 +327,26 @@ def main():
         search_query = st.sidebar.text_input("🔍 Sök efter artiklar")
         sort_option = st.sidebar.radio("Sortera efter:", ["Nyast först", "Äldst först"])
 
-        filtered_articles = articles
-
-        # Filter by category if not "Alla"
-        if selected_category != "Alla":
-            filtered_articles = [row for row in filtered_articles if selected_category in json.loads(row["topic"])]
-
-        # Ensure publication date is a datetime object
-        for row in filtered_articles:
-            if isinstance(row["published"], datetime.date) and not isinstance(row["published"], datetime.datetime):
-                row["published"] = datetime.datetime.combine(row["published"], datetime.datetime.min.time())
-
-        # Filter articles by selected date range
-        filtered_articles = [row for row in filtered_articles if start_date <= row["published"].date() <= end_date]
-
-        # Filter articles by search query in title or summary
-        if search_query:
-            filtered_articles = [
-                row for row in filtered_articles 
-                if search_query.lower() in row['title'].lower() or search_query.lower() in row['summary'].lower()
-            ]
-
-        # Sort articles by publication date
-        if sort_option == "Nyast först":
-            filtered_articles.sort(key=lambda x: x['published'], reverse=True)
-        else:
-            filtered_articles.sort(key=lambda x: x['published'])
-
-        total_articles = len(filtered_articles)
+        articles = fetch_articles_filtered(start_date, end_date, selected_category, search_query, sort_option)
+        total_articles = len(articles)
         st.subheader(f"# Totalt antal artiklar efter filtrering: {total_articles}")
 
-        # Display each filtered article
-        for row in filtered_articles:
-            with st.container():
-                st.subheader(row['title'])
-                st.write(row['summary'])
-                st.write(f"🕒 Publicerad: {row['published']}")
-                st.write(f"📂 Kategorier: {', '.join(json.loads(row['topic']))}")
-                st.markdown(f"[🔗 Läs mer]({row['link']})")
-                st.write("---")
+        for row in articles:
+            st.subheader(row['title'])
+            st.write(row['summary'])
+            st.write(f"🕒 Publicerad: {row['published']}")
+            st.write(f"📂 Kategorier: {', '.join(json.loads(row['topic']))}")
+            st.markdown(f"[🔗 Läs mer]({row['link']})")
+            st.write("---")
 
     elif page == "📎 Dataanalys":
         st.title("📎 Dataanalys av nyhetsartiklar")
         st.sidebar.subheader("⚙️ Filteralternativ")
-        start_date = st.sidebar.date_input(f"Från: (Äldsta: {earliest_date})", earliest_date)
-        end_date = st.sidebar.date_input(f"Till: (Nyaste: {latest_date})", latest_date)
+        start_date = st.sidebar.date_input(f"📅 Från och med: (Äldsta: {earliest_date})", earliest_date)
+        end_date = st.sidebar.date_input(f"📅 Till och med: (Nyaste: {latest_date})", latest_date)
 
-        filtered_articles = [row for row in fetch_articles() if start_date <= row["published"].date() <= end_date]
-        total_articles = len(filtered_articles)
+        articles = fetch_articles_filtered(start_date, end_date, "Alla", "", "Nyast först")
+        total_articles = len(articles)
 
         # Create two columns for visualizations
         col1, col2 = st.columns([1, 1])
@@ -323,6 +356,23 @@ def main():
             bar_chart_fig = generate_bar_chart(start_date, end_date)
             if bar_chart_fig:
                 st.pyplot(bar_chart_fig)
+            else:
+                st.write("Ingen data tillgänglig för valt datumintervall.")
+            
+            st.write("---")
+
+            st.subheader("☁️ Vanligaste orden i nyhetsartiklar")
+            wordcloud_fig = generate_wordcloud(start_date, end_date)
+            if wordcloud_fig:
+                st.pyplot(wordcloud_fig)
+            else:
+                st.write("Ingen text tillgänglig för att skapa en WordCloud.")
+            
+        with col2:
+            st.subheader("📈 Totalt antal artiklar per dag")
+            total_line_chart_fig = generate_total_articles_line_chart(start_date, end_date)
+            if total_line_chart_fig:
+                st.pyplot(total_line_chart_fig)
             else:
                 st.write("Ingen data tillgänglig för valt datumintervall.")
 
@@ -335,14 +385,7 @@ def main():
             else:
                 st.write("Ingen data tillgänglig för valt datumintervall.")
 
-            st.write("---")
-
-            st.subheader("☁️ Vanligaste orden i nyhetsartiklarna")
-            wordcloud_fig = generate_wordcloud(start_date, end_date)
-            if wordcloud_fig:
-                st.pyplot(wordcloud_fig)
-            else:
-                st.write("Ingen text tillgänglig för att skapa en WordCloud.")
-
 if __name__ == "__main__":
     main()
+
+# C:\workspace\ML\ML-grupp6\Gruppuppgift\App_6.py
