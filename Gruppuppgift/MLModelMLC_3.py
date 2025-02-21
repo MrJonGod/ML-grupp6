@@ -30,6 +30,36 @@ from sklearn.svm import SVC
 if not sys.warnoptions:
     warnings.simplefilter("ignore")
 
+# Check if stopwords are already downloaded; if not, download them
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+
+# Initialize stopwords and stemmer for Swedish
+stop_words = set(stopwords.words('swedish'))
+stemmer = SnowballStemmer("swedish")
+
+# Custom tokenizer that combines lowercasing, HTML tag removal, punctuation and number removal,
+# tokenization, stopwords removal, and stemming
+def custom_tokenizer(text):
+    # Ensure the input is a string to avoid errors with non-string values
+    if not isinstance(text, str):
+        text = str(text)
+    # Convert text to lowercase
+    text = text.lower()
+    # Remove HTML tags
+    text = re.sub(r'<.*?>', '', text)
+    # Remove punctuation (the pattern is defined as a raw string to avoid escape issues)
+    text = re.sub(r'[^\w\s]', '', text)
+    # Remove numbers
+    text = re.sub(r'\d+', '', text)
+    # Split text into tokens
+    tokens = text.split()
+    # Remove stopwords and apply stemming
+    tokens = [stemmer.stem(token) for token in tokens if token not in stop_words]
+    return tokens
+
 # Load the dataset
 DATA_PATH = "C:\\workspace\\ML\\ML-grupp6\\Gruppuppgift\\Book1_2.csv"
 data_raw = pd.read_csv(DATA_PATH)
@@ -37,25 +67,6 @@ data_raw = data_raw.sample(frac=1)  # Shuffle data
 
 # Extract categories (excluding 'Id' and 'Heading')
 categories = list(data_raw.columns[2:])
-
-# Preprocessing: clean text
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
-    text = re.sub(r'\d+', '', text)  # Remove numbers
-    text = re.sub(r'<.*?>', '', text)  # Remove HTML tags
-    return text
-
-data_raw['Heading'] = data_raw['Heading'].apply(preprocess_text)
-
-# Remove stopwords
-nltk.download('stopwords')
-stop_words = set(stopwords.words('swedish'))
-data_raw['Heading'] = data_raw['Heading'].apply(lambda x: ' '.join([word for word in x.split() if word not in stop_words]))
-
-# Apply stemming
-stemmer = SnowballStemmer("swedish")
-data_raw['Heading'] = data_raw['Heading'].apply(lambda x: ' '.join([stemmer.stem(word) for word in x.split()]))
 
 # Replace NaN with 0
 data_raw.fillna(0, inplace=True)
@@ -68,11 +79,17 @@ x_test_text = test['Heading']
 y_train = train.drop(labels=['Id', 'Heading'], axis=1)
 y_test = test.drop(labels=['Id', 'Heading'], axis=1)
 
-# Vectorization
-vectorizer = TfidfVectorizer(strip_accents='unicode', analyzer='word', ngram_range=(1,3), norm='l2')
-vectorizer.fit(x_train_text)
+# Vectorization using TfidfVectorizer with the custom tokenizer
+vectorizer = TfidfVectorizer(
+    tokenizer=custom_tokenizer,  # Use our custom tokenizer for preprocessing
+    preprocessor=None,           # Disable built-in preprocessing as it's handled in the tokenizer
+    lowercase=False,             # Already converted to lowercase in the tokenizer
+    analyzer='word',
+    ngram_range=(1, 3),
+    norm='l2'
+)
 
-x_train = vectorizer.transform(x_train_text)
+x_train = vectorizer.fit_transform(x_train_text)
 x_test = vectorizer.transform(x_test_text)
 
 # Define SVC model with GridSearchCV
@@ -93,7 +110,7 @@ print("Best parameters:", grid.best_params_)
 print("Best cross-validation score:", grid.best_score_)
 
 best_clf_pipeline = grid.best_estimator_
-best_clf_pipeline.fit(x_train, y_train)
+#best_clf_pipeline.fit(x_train, y_train)
 
 # Predict on test data
 y_pred = best_clf_pipeline.predict(x_test)
