@@ -23,9 +23,11 @@ import nltk
 from nltk.corpus import stopwords
 import matplotlib.dates as mdates
 
-# Download Swedish stopwords if not already available
-nltk.download('stopwords')
-SWEDISH_STOPWORDS = set(stopwords.words('swedish'))
+# Check if stopwords are already downloaded; if not, download them
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords', quiet=True)
 
 # Database configuration using Streamlit secrets
 DB_CONFIG = {
