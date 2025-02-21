@@ -251,6 +251,53 @@ def generate_line_chart(start_date, end_date):
 
     return fig
 
+def generate_total_articles_line_chart(start_date, end_date):
+    """
+    Generates a line chart that shows the total number of articles published per day 
+    within the specified date range.
+
+    Args:
+        start_date (date): The start date for filtering.
+        end_date (date): The end date for filtering.
+
+    Returns:
+        matplotlib.figure.Figure or None: The figure with the line chart if data exists, otherwise None.
+    """
+    # Adjust end_date to include the entire day
+    end_date_exclusive = end_date + datetime.timedelta(days=1)
+    
+    # Fetch publication dates from the database
+    with get_db_cursor() as cursor:
+        query = "SELECT DATE(published) AS publish_date FROM news WHERE published >= %s AND published < %s"
+        cursor.execute(query, (start_date, end_date_exclusive))
+        data = cursor.fetchall()
+    
+    df = pd.DataFrame(data)
+    if df.empty:
+        return None
+
+    # Count the number of articles per day
+    df_count = df.groupby("publish_date").size().reset_index(name="total_articles")
+    df_count["publish_date"] = pd.to_datetime(df_count["publish_date"])
+
+    # Create the line chart
+    fig, ax = plt.subplots(figsize=(10, 5), dpi=100)
+    ax.plot(df_count["publish_date"], df_count["total_articles"], marker="o", linestyle="-", color="#4086DC")
+
+    # Format the chart to match the dashboard theme
+    fig.patch.set_facecolor("#0E1117")
+    ax.set_facecolor("#0E1117")
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+    ax.tick_params(axis='x', colors="white")
+    ax.tick_params(axis='y', colors="white")
+    ax.grid(True, linestyle="--", alpha=0.7, color="gray")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+    plt.xticks(rotation=45, ha="right")
+
+    return fig
+
+
 def main():
     """
     Main function to run the Streamlit application.
@@ -314,21 +361,31 @@ def main():
             
             st.write("---")
 
-            st.subheader("📈 Antal artiklar per kategori per dag")
-            line_chart_fig = generate_line_chart(start_date, end_date)
-            if line_chart_fig:
-                st.pyplot(line_chart_fig)
-            else:
-                st.write("Ingen data tillgänglig för valt datumintervall.")
-            
-            st.write("---")
-
             st.subheader("☁️ Vanligaste orden i nyhetsartiklar")
             wordcloud_fig = generate_wordcloud(start_date, end_date)
             if wordcloud_fig:
                 st.pyplot(wordcloud_fig)
             else:
                 st.write("Ingen text tillgänglig för att skapa en WordCloud.")
+            
+        with col2:
+            st.subheader("📈 Totalt antal artiklar per dag")
+            total_line_chart_fig = generate_total_articles_line_chart(start_date, end_date)
+            if total_line_chart_fig:
+                st.pyplot(total_line_chart_fig)
+            else:
+                st.write("Ingen data tillgänglig för valt datumintervall.")
+
+            st.write("---")
+
+            st.subheader("📈 Antal artiklar per kategori per dag")
+            line_chart_fig = generate_line_chart(start_date, end_date)
+            if line_chart_fig:
+                st.pyplot(line_chart_fig)
+            else:
+                st.write("Ingen data tillgänglig för valt datumintervall.")
 
 if __name__ == "__main__":
     main()
+
+# C:\workspace\ML\ML-grupp6\Gruppuppgift\App_6.py
