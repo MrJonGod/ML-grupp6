@@ -95,3 +95,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+"""
+Database connection successful!
+174 articles processed (newly inserted or updated in the database).
+Database connection closed.
+"""

@@ -12,9 +12,11 @@ It:
 """
 
 import re
+import os
 import sys
 import warnings
 import nltk
+import joblib
 import pandas as pd
 import numpy as np
 from nltk.corpus import stopwords
@@ -65,7 +67,7 @@ DATA_PATH = "C:\\workspace\\ML\\ML-grupp6\\Gruppuppgift\\Book1_2.csv"
 data_raw = pd.read_csv(DATA_PATH)
 data_raw = data_raw.sample(frac=1)  # Shuffle data
 
-# Extract categories (excluding 'Id' and 'Heading')
+# Extract categories
 categories = list(data_raw.columns[2:])
 
 # Replace NaN with 0
@@ -122,3 +124,9 @@ categories = categories
 x_train = x_train
 vectorizer = vectorizer
 best_clf_pipeline = best_clf_pipeline
+
+"""
+Best parameters: {'clf__estimator__C': 10, 'clf__estimator__gamma': 0.0001, 'clf__estimator__kernel': 'linear'}
+Best cross-validation score: 0.2623595505617977
+Test Accuracy: 0.39528795811518325
+"""

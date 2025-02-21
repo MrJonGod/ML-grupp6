@@ -104,3 +104,15 @@ def main():
 if __name__ == "__main__":
     validDict = main()
 
+"""
+    {
+        "title": "Israel: Attack mot smuggelrutt",
+        "summary": "Israel attackerade gränsområden mellan Libanon och Syrien på torsdagskvällen, meddelar israeliska militären (IDF).",
+        "link": "https://www.aftonbladet.se/nyheter/a/jQnEnL/israel-attack-mot-smuggelrutt",
+        "published": "2025-02-21 00:47:35",
+        "categories": [
+            "Samhälle & Konflikter"
+        ]
+    },
+"""
+
